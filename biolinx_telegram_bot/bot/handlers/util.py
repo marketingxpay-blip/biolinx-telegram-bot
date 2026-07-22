@@ -60,8 +60,36 @@ async def cmd_testpost(message: Message):
     await message.reply("Posted a poll + Question of the Day in Bio-Lounge for testing.")
 
 
+async def cmd_cleanup(message: Message):
+    """Admin-only: delete every forum topic except the bot's own current set + General."""
+    try:
+        member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
+        if member.status not in ("creator", "administrator"):
+            return
+    except Exception:
+        return
+    from .. import db
+    keep = set()
+    for key in ("pf_topic_id", "games_topic_id", "lounge_topic_id", "questions_topic_id"):
+        v = db.kv_get(key)
+        if v:
+            keep.add(int(v))
+    deleted = 0
+    for tid in range(2, 80):
+        if tid in keep:
+            continue
+        try:
+            ok = await message.bot.delete_forum_topic(message.chat.id, tid)
+            if ok:
+                deleted += 1
+        except Exception:
+            pass
+    await message.reply(f"Cleanup done. Deleted {deleted} old topics. Kept {len(keep)} + General.")
+
+
 def register(dp: Dispatcher):
     dp.message.register(cmd_testpost, Command("testpost"))
+    dp.message.register(cmd_cleanup, Command("cleanup"))
     dp.message.register(cmd_id, Command("id"))
     # Private-chat forwarded messages only.
     dp.message.register(on_forwarded_dm,
