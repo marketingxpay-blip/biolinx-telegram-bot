@@ -21,6 +21,19 @@ log = logging.getLogger("ephemeral")
 
 _API = "https://api.telegram.org/bot{token}/{method}"
 
+# ephemeral_message_id -> receiver_user_id. Bot API 10.2 needs the recipient
+# on every edit/delete, so we remember it from the original send. Bounded.
+_RECEIVERS = {}
+_MAX_RECEIVERS = 10000
+
+
+def _remember(eph_id, receiver_user_id):
+    if eph_id is None:
+        return
+    if len(_RECEIVERS) > _MAX_RECEIVERS:
+        _RECEIVERS.clear()
+    _RECEIVERS[eph_id] = receiver_user_id
+
 
 async def _call(method: str, payload: dict) -> dict:
     url = _API.format(token=config.require_bot_token(), method=method)
@@ -54,24 +67,34 @@ async def send_ephemeral(chat_id, receiver_user_id, text,
     data = await _call("sendMessage", payload)
     if data.get("ok"):
         res = data["result"]
-        return res.get("ephemeral_message_id") or res.get("message_id")
+        eph_id = res.get("ephemeral_message_id") or res.get("message_id")
+        _remember(eph_id, receiver_user_id)
+        return eph_id
     return None
 
 
 async def edit_ephemeral_text(chat_id, ephemeral_message_id, text,
-                              reply_markup=None):
+                              reply_markup=None, receiver_user_id=None):
     payload = {
         "chat_id": chat_id,
         "ephemeral_message_id": ephemeral_message_id,
         "text": text,
     }
+    # Bot API 10.2 requires the recipient on ephemeral edits/deletes.
+    receiver_user_id = receiver_user_id or _RECEIVERS.get(ephemeral_message_id)
+    if receiver_user_id is not None:
+        payload["receiver_user_id"] = receiver_user_id
     if reply_markup is not None:
         payload["reply_markup"] = reply_markup
     return await _call("editEphemeralMessageText", payload)
 
 
-async def delete_ephemeral(chat_id, ephemeral_message_id):
-    return await _call("deleteEphemeralMessage", {
+async def delete_ephemeral(chat_id, ephemeral_message_id, receiver_user_id=None):
+    payload = {
         "chat_id": chat_id,
         "ephemeral_message_id": ephemeral_message_id,
-    })
+    }
+    receiver_user_id = receiver_user_id or _RECEIVERS.get(ephemeral_message_id)
+    if receiver_user_id is not None:
+        payload["receiver_user_id"] = receiver_user_id
+    return await _call("deleteEphemeralMessage", payload)
