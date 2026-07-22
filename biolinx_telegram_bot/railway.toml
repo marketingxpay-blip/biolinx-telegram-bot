@@ -1,0 +1,11 @@
+# Railway deployment config for the Biolinx Affiliate Telegram bot.
+# The bot uses long-polling (no public URL / webhook needed), so it runs
+# as a "worker" process, not a web service.
+
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "python main.py"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
