@@ -47,7 +47,21 @@ async def on_forwarded_dm(message: Message):
         )
 
 
+async def cmd_testpost(message: Message):
+    try:
+        member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
+        if member.status not in ("creator", "administrator"):
+            return
+    except Exception:
+        return
+    from ..scheduler import post_daily_poll, post_daily_qotd
+    await post_daily_poll(message.bot)
+    await post_daily_qotd(message.bot)
+    await message.reply("Posted a poll + Question of the Day in Bio-Lounge for testing.")
+
+
 def register(dp: Dispatcher):
+    dp.message.register(cmd_testpost, Command("testpost"))
     dp.message.register(cmd_id, Command("id"))
     # Private-chat forwarded messages only.
     dp.message.register(on_forwarded_dm,
